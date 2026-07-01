@@ -388,64 +388,81 @@ with tab4:
 
 # --- TAB 5: YÖNETİM & DOSYA İŞLEMLERİ ---
 with tab5:
-    st.subheader("⚙️ Yönetim Paneli & Turnuva Yedekleme")
-    
-    st.markdown("### 💾 Turnuva Veri Yönetimi (Dosya Kaydet / Yükle)")
+    st.subheader("⚙️ Yönetim Paneli")
+
+    # 1. BÖLÜM: TAKIM VE OYUNCU DÜZENLEME (Esnek Modül)
+    with st.expander("✍️ Takım İsmi ve Kadro Düzenle (Gelişmiş)"):
+        if not st.session_state.skor_tablosu.empty:
+            tum_gruplar = st.session_state.skor_tablosu['Grup'].unique()
+            secilen_grup = st.selectbox("Düzenlemek İçin Grup Seç:", tum_gruplar, key="admin_edit_grup")
+            
+            mevcut_kadrolar = st.session_state.takim_kadrolari.get(secilen_grup, {})
+            
+            st.write(f"### 🎯 {secilen_grup} Takım ve Kadro Düzenleme")
+            
+            yeni_kadro_yapisi = {}
+            takim_isim_degisiklikleri = {} 
+            
+            for eski_takim_adi, oyuncular in mevcut_kadrolar.items():
+                col1, col2 = st.columns([1, 2])
+                with col1:
+                    yeni_ad = st.text_input(f"Takım Adı", value=eski_takim_adi, key=f"ad_{eski_takim_adi}")
+                    if yeni_ad != eski_takim_adi:
+                        takim_isim_degisiklikleri[eski_takim_adi] = yeni_ad
+                with col2:
+                    yeni_oyuncular_text = st.text_area(f"Oyuncular (Her satıra bir isim)", value="\n".join(oyuncular), key=f"oyuncu_{eski_takim_adi}", height=100)
+                    yeni_kadro_yapisi[yeni_ad if yeni_ad else eski_takim_adi] = [o.strip() for o in yeni_oyuncular_text.split('\n') if o.strip()]
+
+            if st.button("💾 Tüm Değişiklikleri Kaydet"):
+                st.session_state.takim_kadrolari[secilen_grup] = yeni_kadro_yapisi
+                if takim_isim_degisiklikleri:
+                    for eski, yeni in takim_isim_degisiklikleri.items():
+                        st.session_state.skor_tablosu.replace({eski: yeni}, inplace=True)
+                        st.session_state.mac_programi.replace({eski: yeni}, inplace=True)
+                st.success("✅ Güncellemeler başarıyla kaydedildi!")
+                st.rerun()
+        else:
+            st.info("Düzenlenecek veri bulunamadı.")
+
+    st.markdown("---")
+
+    # 2. BÖLÜM: DOSYA YEDEKLEME VE YÜKLEME
+    st.markdown("### 💾 Dosya İşlemleri")
     c_save, c_load = st.columns(2)
     
     with c_save:
-        st.write("📋 **Mevcut Durumu Bilgisayara Yedekle**")
+        st.write("📋 **Mevcut Durumu Yedekle**")
         export_data = {
             "skor_tablosu": st.session_state.skor_tablosu.to_dict(orient="records"),
             "mac_programi": st.session_state.mac_programi.to_dict(orient="records"),
             "takim_kadrolari": st.session_state.takim_kadrolari
         }
-        json_str = json.dumps(export_data, ensure_ascii=False, indent=4)
         st.download_button(
-            label="📥 Turnuvayı Dosya Olarak İndir (.json)",
-            data=json_str,
+            label="📥 Turnuvayı İndir (.json)",
+            data=json.dumps(export_data, ensure_ascii=False, indent=4),
             file_name="tenis_turnuva_yedek.json",
             mime="application/json"
         )
 
     with c_load:
-        st.write("📤 **Kaydedilmiş Turnuvayı Geri Yükle**")
-        uploaded_file = st.file_uploader("Yedek Dosyasını Seçin (.json)", type=["json"])
-        
-        # Dosya seçildiğinde direkt işlemesin, "Uygula" butonunu beklesin
+        st.write("📤 **Turnuvayı Geri Yükle**")
+        uploaded_file = st.file_uploader("Yedek Dosyası (.json)", type=["json"])
         if uploaded_file is not None:
             if st.button("📥 Seçilen Dosyayı Yükle ve Uygula"):
                 try:
                     data = json.load(uploaded_file)
                     st.session_state.skor_tablosu = pd.DataFrame(data["skor_tablosu"])
-                    
-                    df_loaded_prog = pd.DataFrame(data["mac_programi"])
-                    for col in ["Tarih", "Gün Adı"]:
-                        if col not in df_loaded_prog.columns:
-                            df_loaded_prog[col] = ""
-                            
-                    st.session_state.mac_programi = df_loaded_prog
+                    st.session_state.mac_programi = pd.DataFrame(data["mac_programi"])
                     st.session_state.takim_kadrolari = data["takim_kadrolari"]
-                    st.success("✅ Veriler yüklendi! Lütfen sayfayı yenilemek için yukarıdaki 'Rerun' veya 'Yenile' butonuna basın.")
+                    st.success("✅ Veriler yüklendi! Sayfa yenileniyor...")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Dosya yüklenirken hata oluştu: {e}")
-                
-    st.markdown("---")
-    st.markdown("### 🚨 Tehlikeli Bölge (Sistem Sıfırlama)")
-    
-    if not st.session_state.skor_tablosu.empty:
-        gruplar = st.session_state.skor_tablosu['Grup'].unique()
-        silinecek_grup = st.selectbox("Silinecek Grup Seç:", gruplar)
-        if st.button(f"❌ {silinecek_grup} grubunu sil"):
-            st.session_state.skor_tablosu = st.session_state.skor_tablosu[st.session_state.skor_tablosu['Grup'] != silinecek_grup]
-            if silinecek_grup in st.session_state.takim_kadrolari:
-                del st.session_state.takim_kadrolari[silinecek_grup]
-            st.session_state.skor_tablosu.index = range(1, len(st.session_state.skor_tablosu) + 1)
-            st.rerun()
+                    st.error(f"Dosya okuma hatası: {e}")
 
     st.markdown("---")
-    # GÜVENLİ SIFIRLAMA MANTIĞI
+    
+    # 3. BÖLÜM: GÜVENLİ SIFIRLAMA
+    st.markdown("### 🚨 Tehlikeli Bölge (Sistem Sıfırlama)")
     onay_kutususu = st.checkbox("🚨 TÜM TURNUVAYI (Skorlar, Kadrolar, Program) SİLMEK İSTİYORUM.")
     
     if onay_kutususu:
