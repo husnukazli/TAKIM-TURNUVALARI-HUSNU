@@ -407,48 +407,57 @@ with tab5:
             file_name="tenis_turnuva_yedek.json",
             mime="application/json"
         )
-        st.caption("Bu butona basarak turnuvanın o anki tüm bilgilerini yedek bir dosya olarak bilgisayarınıza indirebilirsiniz.")
 
     with c_load:
         st.write("📤 **Kaydedilmiş Turnuvayı Geri Yükle**")
         uploaded_file = st.file_uploader("Yedek Dosyasını Seçin (.json)", type=["json"])
+        
+        # Dosya seçildiğinde direkt işlemesin, "Uygula" butonunu beklesin
         if uploaded_file is not None:
-            try:
-                data = json.load(uploaded_file)
-                st.session_state.skor_tablosu = pd.DataFrame(data["skor_tablosu"])
-                
-                # Eski yedek dosyaları yüklenirse hata vermemesi için koruma sütunları
-                df_loaded_prog = pd.DataFrame(data["mac_programi"])
-                for col in ["Tarih", "Gün Adı"]:
-                    if col not in df_loaded_prog.columns:
-                        df_loaded_prog[col] = ""
-                        
-                st.session_state.mac_programi = df_loaded_prog
-                st.session_state.takim_kadrolari = data["takim_kadrolari"]
-                st.success("✅ Turnuva verileri başarıyla yüklendi! Tüm sekmeler güncellendi.")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Dosya yüklenirken bir hata oluştu: {e}")
+            if st.button("📥 Seçilen Dosyayı Yükle ve Uygula"):
+                try:
+                    data = json.load(uploaded_file)
+                    st.session_state.skor_tablosu = pd.DataFrame(data["skor_tablosu"])
+                    
+                    df_loaded_prog = pd.DataFrame(data["mac_programi"])
+                    for col in ["Tarih", "Gün Adı"]:
+                        if col not in df_loaded_prog.columns:
+                            df_loaded_prog[col] = ""
+                            
+                    st.session_state.mac_programi = df_loaded_prog
+                    st.session_state.takim_kadrolari = data["takim_kadrolari"]
+                    st.success("✅ Veriler yüklendi! Lütfen sayfayı yenilemek için yukarıdaki 'Rerun' veya 'Yenile' butonuna basın.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Dosya yüklenirken hata oluştu: {e}")
                 
     st.markdown("---")
-    st.markdown("### 🚨 Tehlikeli Bölge")
+    st.markdown("### 🚨 Tehlikeli Bölge (Sistem Sıfırlama)")
+    
     if not st.session_state.skor_tablosu.empty:
         gruplar = st.session_state.skor_tablosu['Grup'].unique()
-        silinecek_grup = st.selectbox("Silinecek Grup:", gruplar)
-        if st.button("❌ Bu Grubu ve Kadrolarını Tamamen Sil"):
+        silinecek_grup = st.selectbox("Silinecek Grup Seç:", gruplar)
+        if st.button(f"❌ {silinecek_grup} grubunu sil"):
             st.session_state.skor_tablosu = st.session_state.skor_tablosu[st.session_state.skor_tablosu['Grup'] != silinecek_grup]
             if silinecek_grup in st.session_state.takim_kadrolari:
                 del st.session_state.takim_kadrolari[silinecek_grup]
             st.session_state.skor_tablosu.index = range(1, len(st.session_state.skor_tablosu) + 1)
             st.rerun()
-            
-    if st.button("🚨 TÜM SİSTEMİ SIFIRLA (HER ŞEY SİLİNİR)"):
-        st.session_state.skor_tablosu = pd.DataFrame(columns=[
-            "Grup", "Gün", "Eşleşme", "Branş", "Takım 1", "Takım 2", "T1_Oyuncu", "T2_Oyuncu",
-            "1.Set T1", "1.Set T2", "2.Set T1", "2.Set T2", "3.Set T1", "3.Set T2"
-        ])
-        st.session_state.mac_programi = pd.DataFrame(columns=[
-            "Maç Saati", "Tarih", "Gün Adı", "Kort", "Grup", "Gün", "Branş", "Eşleşme", "Takım 1", "Takım 2", "Canlı Skor"
-        ])
-        st.session_state.takim_kadrolari = {}
-        st.rerun()
+
+    st.markdown("---")
+    # GÜVENLİ SIFIRLAMA MANTIĞI
+    onay_kutususu = st.checkbox("🚨 TÜM TURNUVAYI (Skorlar, Kadrolar, Program) SİLMEK İSTİYORUM.")
+    
+    if onay_kutususu:
+        if st.button("⚠️ EMİNİM, HER ŞEYİ SIFIRLA"):
+            st.session_state.skor_tablosu = pd.DataFrame(columns=[
+                "Grup", "Gün", "Eşleşme", "Branş", "Takım 1", "Takım 2", "T1_Oyuncu", "T2_Oyuncu",
+                "1.Set T1", "1.Set T2", "2.Set T1", "2.Set T2", "3.Set T1", "3.Set T2"
+            ])
+            st.session_state.mac_programi = pd.DataFrame(columns=[
+                "Maç Saati", "Tarih", "Gün Adı", "Kort", "Grup", "Gün", "Branş", "Eşleşme", "Takım 1", "Takım 2", "Canlı Skor"
+            ])
+            st.session_state.takim_kadrolari = {}
+            st.rerun()
+    else:
+        st.warning("Sistemi tamamen sıfırlamak için yukarıdaki onay kutusunu işaretleyin.")
